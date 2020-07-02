@@ -836,9 +836,10 @@ public class WifiConnectivityManager {
     private void startPeriodicSingleScan() {
         long currentTimeStamp = mClock.getElapsedSinceBootMillis();
 
+    List<WifiConfiguration> savedNetworks = mConfigManager.getSavedNetworks();
         if (mLastPeriodicSingleScanTimeStamp != RESET_TIME_STAMP) {
             long msSinceLastScan = currentTimeStamp - mLastPeriodicSingleScanTimeStamp;
-            if (msSinceLastScan < PERIODIC_SCAN_INTERVAL_MS) {
+            if (msSinceLastScan < PERIODIC_SCAN_INTERVAL_MS && !(savedNetworks.size() > 0 && mWifiState == WIFI_STATE_DISCONNECTED)) {
                 localLog("Last periodic single scan started " + msSinceLastScan
                         + "ms ago, defer this new scan request.");
                 schedulePeriodicScanTimer(PERIODIC_SCAN_INTERVAL_MS - (int) msSinceLastScan);
@@ -868,12 +869,19 @@ public class WifiConnectivityManager {
         if (isScanNeeded) {
             mLastPeriodicSingleScanTimeStamp = currentTimeStamp;
             startSingleScan(isFullBandScan, WIFI_WORK_SOURCE);
+            if (savedNetworks.size() > 0 && mWifiState == WIFI_STATE_DISCONNECTED) {
+		mPeriodicSingleScanInterval= 3000
+            }
             schedulePeriodicScanTimer(mPeriodicSingleScanInterval);
 
             // Set up the next scan interval in an exponential backoff fashion.
-            mPeriodicSingleScanInterval *= 2;
-            if (mPeriodicSingleScanInterval >  MAX_PERIODIC_SCAN_INTERVAL_MS) {
-                mPeriodicSingleScanInterval = MAX_PERIODIC_SCAN_INTERVAL_MS;
+            if (savedNetworks.size() > 0 && mWifiState == WIFI_STATE_DISCONNECTED)
+                mPeriodicSingleScanInterval = 3000;
+            else {
+                mPeriodicSingleScanInterval *= 2;
+                if (mPeriodicSingleScanInterval >  MAX_PERIODIC_SCAN_INTERVAL_MS) {
+                    mPeriodicSingleScanInterval = MAX_PERIODIC_SCAN_INTERVAL_MS;
+                }
             }
         } else {
             // Since we already skipped this scan, keep the same scan interval for next scan.
@@ -935,6 +943,7 @@ public class WifiConnectivityManager {
     private void startPeriodicScan(boolean scanImmediately) {
         mPnoScanListener.resetLowRssiNetworkRetryDelay();
 
+    List<WifiConfiguration> savedNetworks = mConfigManager.getSavedNetworks();
         // No connectivity scan if auto roaming is disabled.
         if (mWifiState == WIFI_STATE_CONNECTED && !mEnableAutoJoinWhenAssociated) {
             return;
